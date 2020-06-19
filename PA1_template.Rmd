@@ -1,25 +1,132 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+author: "Cesar"
+date: "18/6/2020"
+output: html_document
+keep_md: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+## 1. Loading and processing the data
+
+For this analysis we must load and process the raw data. This data was obtained from the internet, and represents the total steps, recorded by a wearable device every 5 minutes of each day in October and November 2012.
+
+```{r, echo=TRUE}
+#checks if file exists; if not, downloads zip file
+if(!file.exists("./activity.zip")){
+        fileURL <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+        download.file(fileURL,destfile = "./activity.zip", method = "auto")
+}
+
+#opens files and loads them to a data frame
+steps <- read.csv(unz("./activity.zip","activity.csv"))
+```
+
+## 2. What is mean total number of steps taken per day?
+
+Ignoring the missing values of the dataset, we calculate the total steps per day. We make a bar chart from this info. Additionally, we calculate the mean and median from the 5 minute intervals for each day.
+
+```{r, echo=TRUE}
+#total steps per day
+totalsteps <- aggregate(steps$steps, by = list(steps$date), FUN=sum)
+names(totalsteps) <- c("day","total steps")
+
+#Creates a histogram
+hist(totalsteps$`total steps`, main = "Frequency of total steps per day", xlab = "Total steps")
+
+#calculates mean and median steps
+meansteps <- aggregate(steps$steps, by = list(steps$date), FUN=mean, na.rm=TRUE)
+names(meansteps) <- c("day","mean for 5 min")
+mediansteps <- aggregate(steps$steps, by = list(steps$date), FUN=median, na.rm=TRUE)
+names(mediansteps) <- c("day","median for 5 min")
+
+#Creates a dataframe with all three for convenience
+stepsperday <- merge(totalsteps, meansteps, by.x = "day", by.y = "day")
+stepsperday <- merge(stepsperday, mediansteps, by.x = "day", by.y = "day")
+print(stepsperday)
+```
+
+## 3. What is the average daily activity pattern?
+
+Here, I created an analysis of what the average day would look like. It is then ploted into a time series. Furthermore, the data set is analyzed to find the interval with the highest average number of steps.
+
+```{r, echo=TRUE}
+#calculates and plots the average day
+averageday <- aggregate(steps$steps, by = list(steps$interval), FUN=mean, na.rm=TRUE)
+names(averageday) <- c("interval","steps")
+plot(averageday, type="l", main = "Average day activity", xlab = "minutes")
+
+#indicates the interval with the highest activity
+highestinterval <- averageday[which(averageday$steps == max(averageday$steps)),1]
+print(paste("The highest level of activity was, on average, between minute", highestinterval, 
+            "and minute", highestinterval+5, "each day."))
+```
 
 
+## 4. Imputing missing values
 
-## What is mean total number of steps taken per day?
+Given the incompleteness of the dataset, I make an effort to report the ammount of NAs; after this, missing values are replaced with the average for that interval across all days. A new "stepscomplete" dataset is created by this method. Further, to prove the effectiveness of this method, we recalculate the average meassurements from section 2 using the new data.  
+The frequency histogram shows that the average is overrepresented in the completed dataset, this is to be expected, given the replacement method. The median is also afected, as it was 0 in most days, but is leveraged up in corrected days (due to most averages being above 0, since at least one day has activity at that interval).
 
+```{r, echo=TRUE}
+#counts NA values
+numberNA <- sum(is.na(steps$steps))
+print(paste("There are", numberNA, "missing values."))
 
+#replaces NA with average values for that interval
+stepscomplete <- steps
+for (i in 1:17568) {
+        if (is.na(stepscomplete[i,]$steps)){
+                stepscomplete[i,]$steps <- averageday[which(averageday$interval == stepscomplete[i,]$interval),]$steps
+        }
+}
 
-## What is the average daily activity pattern?
+#repeats analysis from step 2
 
+totalstepscomplete <- aggregate(stepscomplete$steps, by = list(stepscomplete$date), FUN=sum)
+names(totalstepscomplete) <- c("day","total steps")
+hist(totalstepscomplete$`total steps`, main = "Frequency of total steps per day", xlab = "Total steps")
+meanstepscomplete <- aggregate(stepscomplete$steps, by = list(stepscomplete$date), FUN=mean)
+names(meanstepscomplete) <- c("day","mean for 5 min")
+medianstepscomplete <- aggregate(stepscomplete$steps, by = list(stepscomplete$date), FUN=median)
+names(medianstepscomplete) <- c("day","median for 5 min")
+stepsperdaycomplete <- merge(totalstepscomplete, meanstepscomplete, by.x = "day", by.y = "day")
+stepsperdaycomplete <- merge(stepsperdaycomplete, medianstepscomplete, by.x = "day", by.y = "day")
+print(stepsperdaycomplete)
+```
 
+## 5. Are there differences in activity patterns between weekdays and weekends?
 
-## Imputing missing values
+We analyze the dataset to answer a final question. A vector was added to the completed dataset inidcating whether a day is a weekday or weekend. The average weekday and weekend day activities were ploted as was done in section 3. We can clearly see more activity on our weekend days.
 
+```{r, echo=TRUE, fig.height= 10}
+#added weekday identifier. 
+#NOTE: my version of R is in spanish, to replicate this in English change "sábado" to "Satuday" and "domingo" to "Sunday".
+stepscomplete$date <- as.Date(stepscomplete$date, format = "%Y-%m-%d")
+stepscomplete$weekday <- as.character(1:17568)
+for (i in 1:17568) {
+        if (weekdays(stepscomplete[i,]$date) == "sábado" || weekdays(stepscomplete[i,]$date) == "domingo"){
+                stepscomplete[i,]$weekday <- "weekend"
+        } else {
+                stepscomplete[i,]$weekday <- "weekday"
+        }
+}
 
+#average weekday
+stepsweekdays <- stepscomplete[which(stepscomplete$weekday == "weekday"),]
+averageweekday <- aggregate(stepsweekdays$steps, by = list(stepsweekdays$interval), FUN=mean, na.rm=TRUE)
+names(averageweekday) <- c("minutes","steps")
 
-## Are there differences in activity patterns between weekdays and weekends?
+#average weekend day
+stepsweekends <- stepscomplete[which(stepscomplete$weekday == "weekend"),]
+averageweekends <- aggregate(stepsweekends$steps, by = list(stepsweekends$interval), FUN=mean, na.rm=TRUE)
+names(averageweekends) <- c("minutes","steps")
+
+#plots
+par(mfrow = c(2,1))
+plot(averageweekday, type="l", main = "Average weekday activity")
+plot(averageweekends, type="l", main = "Average weekend day activity")
+```
